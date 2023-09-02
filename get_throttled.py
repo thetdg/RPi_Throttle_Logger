@@ -1,3 +1,4 @@
+#!/usr/bin/python
 """
 A well formatted vcgencmd get_throttled report generator
 Run on a RaspberryPi only
@@ -12,8 +13,8 @@ between two successive checks, then no log entry will be made.
 """
 
 import subprocess
-import asyncio 
 import datetime
+import os
 
 
 status_list = [ 'Soft temperature limit has occurred since last reboot',
@@ -25,43 +26,36 @@ status_list = [ 'Soft temperature limit has occurred since last reboot',
                 'Arm frequency currently capped', 
                 'Under-voltage currently detected' ]
 
-old_output = ''
 
-async def get_throttled_data():
-
-    global status_list
-    global old_output
+def get_throttled_data():
 
     data = subprocess.run(['vcgencmd', 'get_throttled'], capture_output=True)
     throttled_data = str(data.stdout)
     
-    while True:
-        if throttled_data == "b'throttled=0x0\\n'":
-            output = 'All okay! Nothing to report.\n\n'
-            
-        else:
-            output = ''
-            old_status = bin(int(throttled_data[14], 16))[2:]
-            old_status = '0'*(4 - len(old_status)) + old_status
-            cur_status = bin(int(throttled_data[18], 16))[2:]
-            cur_status = '0'*(4 - len(cur_status)) + cur_status
-
-            status = old_status + cur_status
-
-            for count in range(8):
-                if status[count] == '1':
-                    output += status_list[count] + '\n'
-            
-        if output != old_output:
-            with open('throttle_data.txt', 'a') as f:
-                timestamp = str(datetime.datetime.now()).split('.')[0]
-                f.write(timestamp + '\n' + output + '\n')
+    
+    if throttled_data == "b'throttled=0x0\\n'":
+        output = 'All okay! Nothing to report.\n'
         
-        old_output = output
-            
-        await asyncio.sleep(10)     
+    else:
+        output = ''
+        old_status = bin(int(throttled_data[14], 16))[2:]
+        old_status = '0'*(4 - len(old_status)) + old_status
+        cur_status = bin(int(throttled_data[18], 16))[2:]
+        cur_status = '0'*(4 - len(cur_status)) + cur_status
+
+        status = old_status + cur_status
+
+        for count in range(8):
+            if status[count] == '1':
+                output += status_list[count] + '\n'
+        
+
+    with open(os.path.expanduser('~/throttle_data.log'), 'a') as f:
+        timestamp = str(datetime.datetime.now()).split('.')[0]
+        to_write = timestamp + '\n' + output + '\n'
+        f.write(to_write)
+        print(to_write)
 
 
-event_loop = asyncio.get_event_loop()
-event_loop.create_task(get_throttled_data())
-event_loop.run_forever()
+if __name__ == '__main__':
+    get_throttled_data()
